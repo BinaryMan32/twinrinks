@@ -1,0 +1,224 @@
+#!/usr/bin/python
+
+import datetime, optparse, re, sys, time, urllib
+import lxml.html
+
+class outputNone:
+  def Begin( self, file ):
+    pass
+  def Event( self, file, rink, start, stop, home, away ):
+    pass
+  def End( self, file ):
+    pass
+
+class outputText:
+  extension = '.txt'
+  format = '%12s%6s%10s%13s%13s'
+  def Begin( self, file ):
+    print >>file, self.format % ( 'DATE', 'DAY', 'TIME', 'HOME', 'AWAY' )
+  def Event( self, file, rink, start, stop, home, away ):
+    print >>file, self.format % ( start.strftime( '%m/%d/%Y' ), start.strftime( '%a' ).upper(), start.strftime( '%I:%M%p' ), home, away )
+  def End( self, file ):
+    pass
+
+class outputCSV( outputText ):
+  extension = '.csv'
+  format = '%s,%s,%s,%s,%s'
+
+class outputICal:
+  extension = '.ical'
+  datetimeOutputFormat = '%Y%m%dT%H%M%S'
+  def Begin( self, file ):
+    print >>file, 'BEGIN:VCALENDAR'
+    print >>file, 'VERSION:2.0'
+    print >>file, 'PRODID:-//Twin Rinks//Calendar Generator//NONSGML v1.0//EN'
+  def Event( self, file, rink, start, stop, home, away ):
+    print >>file, 'BEGIN:VEVENT'
+    print >>file, 'SUMMARY:%s vs. %s' % ( home.capitalize(), away.capitalize() )
+    print >>file, 'LOCATION:Twin Rinks (%s)' % rink
+    print >>file, 'DTSTART:%s' % start.strftime( self.datetimeOutputFormat )
+    print >>file, 'DTEND:%s' % stop.strftime( self.datetimeOutputFormat )
+    print >>file, 'END:VEVENT'
+  def End( self, file ):
+    print >>file, 'END:VCALENDAR'
+
+# dictionary of output plugins
+# user can make a selection with command line options
+outputs = {
+  'none': outputNone(),
+  'text': outputText(),
+  'csv': outputCSV(),
+  'ical': outputICal()
+}
+
+# dictionary of twinrinks calendar urls for each league
+# user can make a selection with command line options
+url = {
+  'leisure': 'http://www.twinrinks.com/recl/leisure%20schedule.php',
+  'bronze': 'http://www.twinrinks.com/recb/bronze%20schedule.php',
+  'silver': 'http://www.twinrinks.com/recs/silver%20schedule.php',
+  'gold': 'http://twinrinks.com/recg/gold%20schedule.php',
+  'platinum': 'http://twinrinks.com/recp/platinum%20schedule.php',
+  'diamond': 'http://twinrinks.com/recd/diamond%20schedule.php',
+}
+
+parser = optparse.OptionParser()
+parser.add_option( '-d', '--debug', action='store_true', dest='debug',
+           help = 'displays debugging information' )
+parser.add_option( '-l', '--league', type='choice', dest='league',
+                   choices = url.keys(), default = 'diamond',
+           help = 'selects a calendar to access [%default]: ' + ', '.join( url.keys() ) )
+parser.add_option( '-t', '--team', dest='team',
+                   help = 'only output games for a specific team' )
+parser.add_option( '-o', '--output', type='choice', dest='output',
+                   choices = outputs.keys(), default = 'text',
+                   help = 'selects an output method: ' + ', '.join( outputs.keys() ) )
+parser.add_option( '-p', '--prefix', type='string', dest='prefix', default='twinrinks',
+                   help = 'output file prefix [%default]' )
+parser.add_option( '-s', '--start-date', type='string', dest='startDate', default=None,
+                   help = 'filter out games before this date, Ex: %s' % datetime.datetime.now().strftime('%x') )
+parser.add_option( '-e', '--end-date', type='string', dest='endDate', default=None,
+                   help = 'filter out games after this date, Ex: %s' % datetime.datetime.now().strftime('%x') )
+parser.add_option( '-i', '--input', type='string', dest='input', default=None,
+                   help = 'read from local file instead of downloading' )		   
+options, args = parser.parse_args()
+
+def ParseDateString( dateString ):
+  if dateString:
+    dateString = datetime.datetime.strptime( dateString, '%x' ).date()
+  return dateString
+
+# parse date inputs
+options.startDate = ParseDateString( options.startDate )
+options.endDate = ParseDateString( options.endDate )
+
+# select the appropriate output plugin
+output = outputs[ options.output ]
+
+# if a file was specified on the command line, use it
+# otherwise, use a url for the league schedule
+if options.input:
+  page = open( options.input ).read()
+else:
+  page = urllib.urlopen( url[ options.league ] ).read()
+
+if options.debug:
+  open('page.txt', 'w').write(page)
+
+# returns a datetime object using the specified date object and time string
+def DateTime( date, timeString ):
+  return datetime.datetime( *( date.timetuple()[0:3] + time.strptime( timeString+'M', '%I:%M%p' )[3:6] ) )
+
+# generates datetime objects for start and stop given the strings for the date and start time
+def GetStartStopDateTime( date, startTime ):
+  startDate = datetime.date( *time.strptime( date, '%m/%d/%Y' )[0:3] )
+  start = DateTime( startDate, startTime )
+
+  # No stop time is available, assume every game is 1:20 long
+  stop = start + datetime.timedelta(hours=1, minutes=20)
+  
+  # If a game ends later than midnight, stop at midnight so it doesn't appear as a multi day event
+  if start.day != stop.day:
+  	stop = startDate + datetime.timedelta(days=1)
+
+  return start, stop
+
+def GetGame(fields):
+  start, stop = GetStartStopDateTime(fields['date'], fields['time'])
+  return {
+    'rink': fields['rink'].upper(),
+    'start': start,
+    'stop': stop,
+    'home': fields['home'].lower(),
+    'away': fields['away'].lower()
+  }
+
+# separate the teams into a list of real teams and special names
+def GetTeams( games ):
+  entries = {}
+  for game in games:
+    entries[ game[ 'home' ] ] = entries.get( game[ 'home' ], 0 ) + 1
+    entries[ game[ 'away' ] ] = entries.get( game[ 'away' ], 0 ) + 1
+
+  if options.debug:
+    print >>sys.stderr, 'COUNT'
+    for name, count in entries.items():
+      print >>sys.stderr, '%20s %2d' % ( name, count )
+
+  if entries:
+    threshold = sum( entries.values() ) * 3 / len( entries ) / 4
+  else:
+    threshold = 0
+
+  teams = []
+  special = []
+
+  for team, count in entries.items():
+    if count >= threshold:
+      teams.append( team )
+    else:
+      special.append( team )
+
+  return teams, special
+
+# get a list of all games
+tree = lxml.html.fromstring(page)
+table = tree.find(".//table")
+rows = table.iter("tr")
+headers = [h.text.lower() for h in rows.next().iter("th")]
+games = []
+for row in rows:
+  data = [d.text for d in row.iter("td")]
+  fields = dict(zip(headers, data))
+  if options.debug:
+    print fields
+  try:
+    game = GetGame(fields)
+    if options.debug:
+      print 'GAME', game
+    games.append( game )
+  except Exception, e:
+    print >>sys.stderr, 'error parsing', fields
+
+teams, special = GetTeams( games )
+
+# filter out games not between start and end dates
+if options.startDate:
+  games = filter( lambda game: game['start'].date() >= options.startDate, games )
+if options.endDate:
+  games = filter( lambda game: game['start'].date() <= options.endDate, games )
+
+if options.debug:
+    print >>sys.stderr, 'teams =', teams
+    print >>sys.stderr, 'special =', special
+
+# generate list of teams to output
+outTeams = []
+if options.team:
+  for team in options.team.lower().split():
+    if team in teams or team == 'all':
+      outTeams.append( team )
+    else:
+      sys.stderr.write( 'Invalid team: %s\n' % team )
+      sys.stderr.write( 'Valid Teams are:\n' )
+      sys.stderr.write( '\n'.join( teams ) + '\n' )
+      sys.exit( 2 )
+else:
+  outTeams = ['all'] + teams
+
+for team in outTeams:
+  outPath = '%s-%s-%s%s' % (options.prefix, options.league, team, output.extension)
+  with open( outPath, 'w' ) as outFile:
+
+    # Filter function that returns
+    if team == 'all':
+      teamFilter = lambda x: True
+    else:
+      teamFilter = lambda x: x == team or x in special
+
+    # process all rows that look like games
+    output.Begin(outFile)
+    for game in games:
+      if teamFilter( game[ 'home' ] ) or teamFilter( game[ 'away' ] ):
+        output.Event( outFile, **game )
+    output.End(outFile)
