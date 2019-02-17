@@ -1,6 +1,6 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
-import datetime, optparse, re, sys, time, urllib
+import datetime, optparse, re, sys, time, urllib.request
 import lxml.html
 
 class outputNone:
@@ -15,9 +15,9 @@ class outputText:
   extension = '.txt'
   format = '%12s%6s%10s%13s%13s'
   def Begin( self, file ):
-    print >>file, self.format % ( 'DATE', 'DAY', 'TIME', 'HOME', 'AWAY' )
+    print(self.format % ( 'DATE', 'DAY', 'TIME', 'HOME', 'AWAY' ), file=file)
   def Event( self, file, rink, start, stop, home, away ):
-    print >>file, self.format % ( start.strftime( '%m/%d/%Y' ), start.strftime( '%a' ).upper(), start.strftime( '%I:%M%p' ), home, away )
+    print(self.format % ( start.strftime( '%m/%d/%Y' ), start.strftime( '%a' ).upper(), start.strftime( '%I:%M%p' ), home, away ), file=file)
   def End( self, file ):
     pass
 
@@ -29,18 +29,18 @@ class outputICal:
   extension = '.ical'
   datetimeOutputFormat = '%Y%m%dT%H%M%S'
   def Begin( self, file ):
-    print >>file, 'BEGIN:VCALENDAR'
-    print >>file, 'VERSION:2.0'
-    print >>file, 'PRODID:-//Twin Rinks//Calendar Generator//NONSGML v1.0//EN'
+    print('BEGIN:VCALENDAR', file=file)
+    print('VERSION:2.0', file=file)
+    print('PRODID:-//Twin Rinks//Calendar Generator//NONSGML v1.0//EN', file=file)
   def Event( self, file, rink, start, stop, home, away ):
-    print >>file, 'BEGIN:VEVENT'
-    print >>file, 'SUMMARY:%s vs. %s' % ( home.capitalize(), away.capitalize() )
-    print >>file, 'LOCATION:Twin Rinks (%s)' % rink
-    print >>file, 'DTSTART:%s' % start.strftime( self.datetimeOutputFormat )
-    print >>file, 'DTEND:%s' % stop.strftime( self.datetimeOutputFormat )
-    print >>file, 'END:VEVENT'
+    print('BEGIN:VEVENT', file=file)
+    print('SUMMARY:%s vs. %s' % ( home.capitalize(), away.capitalize() ), file=file)
+    print('LOCATION:Twin Rinks (%s)' % rink, file=file)
+    print('DTSTART:%s' % start.strftime( self.datetimeOutputFormat ), file=file)
+    print('DTEND:%s' % stop.strftime( self.datetimeOutputFormat ), file=file)
+    print('END:VEVENT', file=file)
   def End( self, file ):
-    print >>file, 'END:VCALENDAR'
+    print('END:VCALENDAR', file=file)
 
 # dictionary of output plugins
 # user can make a selection with command line options
@@ -66,13 +66,13 @@ parser = optparse.OptionParser()
 parser.add_option( '-d', '--debug', action='store_true', dest='debug',
            help = 'displays debugging information' )
 parser.add_option( '-l', '--league', type='choice', dest='league',
-                   choices = url.keys(), default = 'diamond',
-           help = 'selects a calendar to access [%default]: ' + ', '.join( url.keys() ) )
+                   choices = list(url.keys()), default = 'diamond',
+           help = 'selects a calendar to access [%default]: ' + ', '.join( list(url.keys()) ) )
 parser.add_option( '-t', '--team', dest='team',
                    help = 'only output games for a specific team' )
 parser.add_option( '-o', '--output', type='choice', dest='output',
-                   choices = outputs.keys(), default = 'text',
-                   help = 'selects an output method: ' + ', '.join( outputs.keys() ) )
+                   choices = list(outputs.keys()), default = 'text',
+                   help = 'selects an output method: ' + ', '.join( list(outputs.keys()) ) )
 parser.add_option( '-p', '--prefix', type='string', dest='prefix', default='twinrinks',
                    help = 'output file prefix [%default]' )
 parser.add_option( '-s', '--start-date', type='string', dest='startDate', default=None,
@@ -100,7 +100,7 @@ output = outputs[ options.output ]
 if options.input:
   page = open( options.input ).read()
 else:
-  page = urllib.urlopen( url[ options.league ] ).read()
+  page = urllib.request.urlopen( url[ options.league ] ).read()
 
 if options.debug:
   open('page.txt', 'w').write(page)
@@ -141,9 +141,9 @@ def GetTeams( games ):
     entries[ game[ 'away' ] ] = entries.get( game[ 'away' ], 0 ) + 1
 
   if options.debug:
-    print >>sys.stderr, 'COUNT'
-    for name, count in entries.items():
-      print >>sys.stderr, '%20s %2d' % ( name, count )
+    print('COUNT', file=sys.stderr)
+    for name, count in list(entries.items()):
+      print('%20s %2d' % ( name, count ), file=sys.stderr)
 
   if entries:
     threshold = sum( entries.values() ) * 3 / len( entries ) / 4
@@ -153,7 +153,7 @@ def GetTeams( games ):
   teams = []
   special = []
 
-  for team, count in entries.items():
+  for team, count in list(entries.items()):
     if count >= threshold:
       teams.append( team )
     else:
@@ -169,28 +169,28 @@ headers = [h.text.lower() for h in next(rows).iter("th")]
 games = []
 for row in rows:
   data = [d.text for d in row.iter("td")]
-  fields = dict(zip(headers, data))
+  fields = dict(list(zip(headers, data)))
   if options.debug:
-    print fields
+    print(fields)
   try:
     game = GetGame(fields)
     if options.debug:
-      print 'GAME', game
+      print('GAME', game)
     games.append( game )
-  except Exception, e:
-    print >>sys.stderr, 'error parsing', fields
+  except Exception as e:
+    print('error parsing', fields, file=sys.stderr)
 
 teams, special = GetTeams( games )
 
 # filter out games not between start and end dates
 if options.startDate:
-  games = filter( lambda game: game['start'].date() >= options.startDate, games )
+  games = [game for game in games if game['start'].date() >= options.startDate]
 if options.endDate:
-  games = filter( lambda game: game['start'].date() <= options.endDate, games )
+  games = [game for game in games if game['start'].date() <= options.endDate]
 
 if options.debug:
-    print >>sys.stderr, 'teams =', teams
-    print >>sys.stderr, 'special =', special
+    print('teams =', teams, file=sys.stderr)
+    print('special =', special, file=sys.stderr)
 
 # generate list of teams to output
 outTeams = []
