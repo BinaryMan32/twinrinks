@@ -165,7 +165,7 @@ def GetTeams( games ):
 tree = lxml.html.fromstring(page)
 table = tree.find(".//table")
 rows = table.iter("tr")
-headers = [h.text.lower() for h in rows.next().iter("th")]
+headers = [h.text.lower() for h in next(rows).iter("th")]
 games = []
 for row in rows:
   data = [d.text for d in row.iter("td")]
