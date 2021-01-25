@@ -71,7 +71,7 @@ parser.add_option( '-l', '--league', type='choice', dest='league',
 parser.add_option( '-t', '--team', dest='team',
                    help = 'only output games for a specific team' )
 parser.add_option( '-o', '--output', type='choice', dest='output',
-                   choices = list(outputs.keys()), default = 'text',
+                   choices = list(outputs.keys()), default = 'ical',
                    help = 'selects an output method: ' + ', '.join( list(outputs.keys()) ) )
 parser.add_option( '-p', '--prefix', type='string', dest='prefix', default='twinrinks',
                    help = 'output file prefix [%default]' )
