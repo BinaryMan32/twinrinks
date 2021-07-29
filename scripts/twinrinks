@@ -211,6 +211,8 @@ for team in outTeams:
   outPath = '%s-%s-%s%s' % (options.prefix, options.league, team, output.extension)
   with open( outPath, 'w' ) as outFile:
 
+    print(f'writing team "{team}" to {outPath}', file=sys.stderr)
+
     # Filter function that returns
     if team == 'all':
       teamFilter = lambda x: True
