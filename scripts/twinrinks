@@ -57,9 +57,9 @@ url = {
   'leisure': 'http://www.twinrinks.com/recl/leisure%20schedule.php',
   'bronze': 'http://www.twinrinks.com/recb/bronze%20schedule.php',
   'silver': 'http://www.twinrinks.com/recs/silver%20schedule.php',
-  'gold': 'http://twinrinks.com/recg/gold%20schedule.php',
-  'platinum': 'http://twinrinks.com/recp/platinum%20schedule.php',
-  'diamond': 'http://twinrinks.com/recd/diamond%20schedule.php',
+  'gold': 'http://twinrinks.com/recg/gold-schedule.php',
+  'platinum': 'http://twinrinks.com/recp/platinum-schedule.php',
+  'diamond': 'http://twinrinks.com/recd/diamond-schedule.php',
 }
 
 parser = optparse.OptionParser()
