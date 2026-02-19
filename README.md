@@ -1,13 +1,19 @@
 # twinrinks
+
 Twin Rinks Hockey Calendar Scraper
 
-# Installation
-```
-sudo apt install python3-pip python3-dev libxml2-dev libxslt1-dev
-pip3 install --user pipenv
+# Setup
+
+Install `uv` package manager.
+
+```sh
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 # Running
-```
-pipenv run twinrinks -t tan
+
+Generate calendar for a specific team.
+
+```sh
+./twinrinks -t lime
 ```
